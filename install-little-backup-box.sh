@@ -342,7 +342,7 @@ yes | sudo cp -f "${INSTALLER_DIR}/etc/sudoers_d_www-data" "/etc/sudoers.d/www-d
 sudo chmod 0440 "/etc/sudoers.d/www-data"
 
 # PiSugar 3 shutdown hook (power output off after poweroff)
-sudo install -m 0755 "${INSTALLER_DIR}/etc/systemd_system-shutdown_lbb-pisugar3" "/usr/lib/systemd/system-shutdown/lbb-pisugar3"
+sudo install -D -m 0755 "${INSTALLER_DIR}/etc/systemd_system-shutdown_lbb-pisugar3" "/usr/lib/systemd/system-shutdown/lbb-pisugar3"
 
 # allow sudo for pi and www-data without password
 echo 'pi ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/010_pi-nopasswd

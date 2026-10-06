@@ -53,7 +53,6 @@
 import os
 import RPi.GPIO as GPIO
 import pathlib
-import shutil
 import signal
 import subprocess
 import sys
@@ -695,7 +694,9 @@ class DISPLAY(object):
 
 				# display temp only:
 				if temp_screen and os.path.isfile(self.__const_DISPLAY_CONTENT_OLD_FILE):
-					shutil.copyfile(self.__const_DISPLAY_CONTENT_OLD_FILE, f'{ContentFile}')
+					# restore the previous screen as it was: 'set:clear' prevents appending the old lines to themselves
+					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'r') as oCF, open(ContentFile, 'w') as newCF:
+						newCF.write('set:clear\n' + oCF.read())
 
 					if hidden_info:
 						with open(ContentFile, 'a') as newCF:
