@@ -24,9 +24,9 @@ def update(device, image):
 
 
 def frame(text=''):
-	# as display.py renders in mode '1': white (255) text on black (0) background
-	image = Image.new('1', (250, 122), 0)
-	ImageDraw.Draw(image).text((5, 5), text, fill=255)
+	# as display.py renders for e-paper: black (0) text on white (255) background
+	image = Image.new('1', (250, 122), 255)
+	ImageDraw.Draw(image).text((5, 5), text, fill=0)
 	return image
 
 
@@ -43,19 +43,17 @@ def test_first_frame_is_full_refresh_into_both_rams(epd):
 	assert len(spi(epd).ram[0x24]) == 16 * 250
 
 
-def test_background_is_white_unless_inverse():
-	normal = lib_epaper.epd2in13_v4(inverse=False)
-	inverse = lib_epaper.epd2in13_v4(inverse=True)
-	try:
-		update(normal, frame())
-		update(inverse, frame())
-		# the last byte of each 16 byte row holds 6 padding bits outside the 122 visible pixels
-		visible = lambda ram: [b & (0xC0 if i % 16 == 15 else 0xFF) for i, b in enumerate(ram)]
-		assert set(visible(spi(normal).ram[0x24])) == {0xFF, 0xC0}
-		assert set(visible(spi(inverse).ram[0x24])) == {0x00}
-	finally:
-		normal.cleanup()
-		inverse.cleanup()
+def visible(ram):
+	# the last byte of each 16 byte row holds 6 padding bits outside the 122 visible pixels
+	return set(b | 0x3F if i % 16 == 15 else b for i, b in enumerate(ram))
+
+
+def test_images_are_shown_as_they_are(epd):
+	# 255 is white paper (RAM bit 1), 0 is black (RAM bit 0)
+	update(epd, frame())
+	assert visible(spi(epd).ram[0x24]) == {0xFF}
+	update(epd, Image.new('1', (250, 122), 0))
+	assert visible(spi(epd).ram[0x24]) == {0x00, 0x3F}
 
 
 @pytest.mark.parametrize('rotate, panel_xy', [(0, (121, 0)), (2, (0, 249))])
@@ -64,7 +62,7 @@ def test_rotation(rotate, panel_xy):
 	device.capabilities(rotate=rotate)
 	try:
 		image = frame()
-		image.putpixel((0, 0), 255)	# top left of the landscape frame, black on the panel
+		image.putpixel((0, 0), 0)	# black pixel top left of the landscape frame
 		panel = device._epd2in13_v4__to_panel(image)
 		assert panel.size == (122, 250)
 		assert panel.getpixel(panel_xy) == 0

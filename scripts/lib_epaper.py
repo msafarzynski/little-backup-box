@@ -20,6 +20,8 @@
 #
 # The class mimics the subset of the luma device API used by display.py
 # (width, height, mode, persist, capabilities(), contrast(), display()).
+# Images are shown as they are (255 = white paper); display.py renders text black on white
+# for devices with background_white = True.
 #
 # E-paper is slow and must not be driven with high voltage permanently, so:
 # - frames are written by a worker thread (display() never blocks), only the latest frame is drawn
@@ -56,15 +58,15 @@ class epd2in13_v4(object):
 	# display.py: minimum seconds between statusbar-only redraws
 	statusbar_refresh_sec	= 60
 
-	def __init__(self, spi_port=0, spi_device=0, inverse=False):
+	# display.py: render text black on white
+	background_white		= True
+
+	def __init__(self, spi_port=0, spi_device=0):
 		self.persist	= False
 		self.mode		= '1'
 		self.rotate		= 0
 		self.width		= self.PANEL_HEIGHT	# landscape
 		self.height		= self.PANEL_WIDTH
-
-		# False: black text on white background
-		self.__inverse	= inverse
 
 		GPIO.setmode(GPIO.BCM)
 		GPIO.setwarnings(False)
@@ -156,9 +158,6 @@ class epd2in13_v4(object):
 
 	def __to_panel(self, image):
 		image	= image.convert('L')
-
-		if not self.__inverse:
-			image	= ImageChops.invert(image)
 
 		# landscape -> native portrait orientation (rotate=0: upright for the HAT mounted on the Pi)
 		image	= image.rotate((self.rotate * 90 + 270) % 360, expand=True)

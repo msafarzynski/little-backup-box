@@ -187,7 +187,7 @@ class DISPLAY(object):
 
 		try:
 			if self.__conf_DISP_DRIVER == 'WAVESHARE 2.13 E-PAPER HAT V4':
-				self.device	= lib_epaper.epd2in13_v4(spi_port=self.__conf_DISP_SPI_PORT, inverse=self.__conf_DISP_COLOR_INVERSE)
+				self.device	= lib_epaper.epd2in13_v4(spi_port=self.__conf_DISP_SPI_PORT)
 			elif self.__conf_DISP_DRIVER == 'none' or serial is None:
 				self.device	= self.__display_dummy()
 				self.hardware_ready	= False
@@ -219,6 +219,13 @@ class DISPLAY(object):
 			self.device.contrast(self.__conf_DISP_CONTRAST)
 
 			self.device.persist	= False
+
+			# e-paper: black text on white, unless inverted
+			if self.__conf_DISP_COLOR_MODEL == '1' and getattr(self.device, 'background_white', False) != self.__conf_DISP_COLOR_INVERSE:
+				self.color_text		= 0
+				self.color_high		= 0
+				self.color_alert	= 0
+				self.color_bg		= 255
 
 		# define font
 		self.FONT = ImageFont.truetype(self.__const_FONT_PATH, self.__conf_DISP_FONT_SIZE)

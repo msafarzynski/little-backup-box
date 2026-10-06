@@ -392,6 +392,7 @@ class setup(object):
 					'const_MENU_FRAME_TIME':						{'type': 'float'},
 					'const_MENU_TIMEOUT_SEC':						{'type': 'float'},
 					'const_MENU_ACTIVE_MARKERFILE':					{'type': 'str'},
+					'const_DISPLAY_IP_SCREENSAVER_SEC':				{'type': 'int'},
 					'const_RCLONE_CONFIG_FILE':						{'type': 'str'},
 					'const_BUTTONS_CONFIG_FILE':					{'type': 'str'},
 					'const_BUTTONS_PRIVATE_CONFIG_FILE':			{'type': 'str'},

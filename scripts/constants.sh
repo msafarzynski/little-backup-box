@@ -29,6 +29,7 @@ const_IP_SENT_MARKERFILE="/var/www/little-backup-box/tmp/ip-sent.txt"
 const_MENU_FRAME_TIME=0.5
 const_MENU_TIMEOUT_SEC=15
 const_MENU_ACTIVE_MARKERFILE="/var/www/little-backup-box/tmp/menu-active.txt"
+const_DISPLAY_IP_SCREENSAVER_SEC=60
 const_RCLONE_CONFIG_FILE="rclone.conf"
 const_BUTTONS_CONFIG_FILE="buttons.cfg"
 const_BUTTONS_PRIVATE_CONFIG_FILE="buttons.private.cfg"
