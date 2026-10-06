@@ -58,7 +58,7 @@ def test_background_is_white_unless_inverse():
 		inverse.cleanup()
 
 
-@pytest.mark.parametrize('rotate, panel_xy', [(0, (0, 249)), (2, (121, 0))])
+@pytest.mark.parametrize('rotate, panel_xy', [(0, (121, 0)), (2, (0, 249))])
 def test_rotation(rotate, panel_xy):
 	device = lib_epaper.epd2in13_v4()
 	device.capabilities(rotate=rotate)

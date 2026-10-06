@@ -310,7 +310,6 @@ class menu(object):
 					'down':		self.move_down,
 					'left':		self.move_left,
 					'right':	self.move_right,
-					'home':		lambda: self.reset(ShowMenu=True),
 				})
 			except Exception as e:
 				print(f'PiSugar 3 buttons could not be enabled: {e}', file=sys.stderr)

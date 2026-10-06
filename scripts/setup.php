@@ -1369,7 +1369,7 @@ CONFIGDATA;
 
 									}
 									echo("<tr style=\"border: thin solid; vertical-align: top;\"><td><b>pisugar3</b></td>");
-									foreach(array('button 1 double, button 2 double', 'button 1 single', 'button 2 single', 'button 1 long', 'PiSugar 3 buttons (I2C), button 2 long: main menu') as $FIELD) {
+									foreach(array('button 1 double', 'button 1 single', 'button 2 single', 'button 1 long, button 2 double', 'PiSugar 3 buttons (I2C), button 2 = power button') as $FIELD) {
 										echo("<td style=\"border: thin solid; vertical-align: top;\">" . $FIELD . "</td>");
 									}
 									echo("</tr>");

@@ -160,8 +160,8 @@ class epd2in13_v4(object):
 		if not self.__inverse:
 			image	= ImageChops.invert(image)
 
-		# landscape -> native portrait orientation
-		image	= image.rotate((self.rotate * 90 + 90) % 360, expand=True)
+		# landscape -> native portrait orientation (rotate=0: upright for the HAT mounted on the Pi)
+		image	= image.rotate((self.rotate * 90 + 270) % 360, expand=True)
 
 		if image.size != (self.PANEL_WIDTH, self.PANEL_HEIGHT):
 			image	= image.resize((self.PANEL_WIDTH, self.PANEL_HEIGHT))

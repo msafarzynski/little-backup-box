@@ -111,3 +111,8 @@ def test_unmapped_action_is_ignored(monkeypatch):
 	time.sleep(0.2)
 	device.stop()
 	assert bus.regs[0x08] == 0
+
+
+def test_power_button_long_press_is_not_used():
+	# long press is the PiSugar hardware power off
+	assert lib_pisugar.BUTTON_MAP['b2_long'] == 'none'

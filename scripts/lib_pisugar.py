@@ -19,8 +19,9 @@
 #
 # button 1: the firmware detects single/double/long taps and reports them in register 0x08 (bits 0-1).
 #           The event is cleared after reading (as pisugar-server does).
-# button 2: register 0x02 bit 0 only reflects the pressed state, gestures are detected here.
-#           "double press and hold" is the PiSugar power gesture and is ignored.
+# button 2: the PiSugar power button. Register 0x02 bit 0 only reflects the pressed state,
+#           gestures are detected here. Long press (power off) and double press and hold (power on)
+#           belong to the PiSugar and are not mapped.
 #
 # Do not run pisugar-server in parallel, it would consume the tap events of button 1.
 
@@ -30,14 +31,14 @@ import time
 
 import smbus2
 
-# event -> menu action (down, up, right, left, home or none)
+# event -> menu action (down, up, right, left or none)
 BUTTON_MAP	= {
 	'b1_single':	'down',
 	'b1_double':	'up',
 	'b1_long':		'right',
 	'b2_single':	'left',
-	'b2_double':	'up',
-	'b2_long':		'home',
+	'b2_double':	'right',
+	'b2_long':		'none',
 }
 
 class pisugar3_buttons(object):
