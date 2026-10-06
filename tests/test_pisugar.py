@@ -176,3 +176,12 @@ def test_system_shutdown_hook(monkeypatch, action, output_on):
 	assert bool(bus.regs[0x02] & 0x20) == output_on
 	assert bus.regs[0x02] | 0x20 == 0xEC	# other bits untouched
 	assert bus.regs[0x0B] == 0x00
+
+
+def test_menu_hints_use_quickest_gesture():
+	assert lib_pisugar.menu_hints({'down': 'next', 'up': 'prev', 'right': 'OK', 'left': 'back'}) == ['1 next', '11 prev', '22 OK', '2 back']
+
+
+def test_menu_hints_skip_unmapped_actions(monkeypatch):
+	monkeypatch.setattr(lib_pisugar, 'BUTTON_MAP', {'b1_long': 'right'})
+	assert lib_pisugar.menu_hints({'right': 'OK', 'left': 'back'}) == ['1- OK']

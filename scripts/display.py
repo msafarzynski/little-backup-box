@@ -48,6 +48,7 @@
 # time=2:	Display time in seconds (empty for standard config)
 # temp:		show previous screen again after this
 # hidden:	markertext to write into const_DISPLAY_CONTENT_OLD_FILE
+# hint=a|b:	show these items instead of the status bar (button hints of the menu)
 # kill:		terminate display daemon
 
 import os
@@ -89,6 +90,7 @@ class DISPLAY(object):
 		signal.signal(signal.SIGINT, self.terminate)   # Interrupt signal
 
 		self.loop_continue	= True
+		self.hint			= None	# status bar replacement of the current content (set:hint=a|b|c)
 
 		# cleanup pins
 		GPIO.cleanup()
@@ -292,6 +294,10 @@ class DISPLAY(object):
 	def get_statusbar(self):
 		if not self.__conf_DISP_SHOW_STATUSBAR:
 			return(None)
+
+		# button hints of the display menu replace the status
+		if self.hint:
+			return(self.hint)
 
 		statusbar	= []
 
@@ -582,6 +588,7 @@ class DISPLAY(object):
 			import_old_file 		= True
 			temp_screen				= False
 			hidden_info				= ''
+			hint					= None
 
 			# re-check for new files earlier than conf_DISP_FRAME_TIME, if no message was found
 			FrameTime = self.__conf_DISP_FRAME_TIME / 4
@@ -592,10 +599,6 @@ class DISPLAY(object):
 
 				if not os.path.isfile(ContentFile):
 					continue
-
-				# file could be in writing process, wait for minimal file age
-				if time.time() - os.stat(ContentFile).st_mtime < 0.2:
-					time.sleep(0.2)
 
 				Lines = []
 				FrameTime = self.__conf_DISP_FRAME_TIME
@@ -643,6 +646,9 @@ class DISPLAY(object):
 
 							if SettingType == 'hidden':
 								hidden_info		= SettingValue
+
+							if SettingType == 'hint':
+								hint			= SettingValue.split('|')
 
 							if SettingType == 'time' and float(SettingValue) >= 0:
 								FrameTime		= float(SettingValue)
@@ -717,6 +723,7 @@ class DISPLAY(object):
 						if hidden_info:
 							oCF.write(f"\nset:hidden={hidden_info}")
 
+				self.hint	= hint
 				self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
 				display_time	= time.time()
 			else:
@@ -728,7 +735,9 @@ class DISPLAY(object):
 					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=False)
 					display_time	= time.time()
 
-			time.sleep(FrameTime)
+			# menu input ends the frame time early
+			if self.menu_controller.wake.wait(FrameTime):
+				self.menu_controller.wake.clear()
 
 	class __display_dummy(object):
 

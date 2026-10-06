@@ -48,6 +48,21 @@ BUTTON_MAP	= {
 	'b2_long':		'none',
 }
 
+# gesture notation for the on-screen hints: 1 = single, 11 = double, 1- = long press of button 1
+GESTURE_HINTS	= {'single': '{b}', 'double': '{b}{b}', 'long': '{b}-'}
+
+def menu_hints(labels):
+	# labels: dict menu action -> text, e.g. {'down': 'next'}
+	# returns hint items like '1 next', using the quickest gesture for each action
+	hints	= []
+	for action, label in labels.items():
+		events	= [event for event, mapped in BUTTON_MAP.items() if mapped == action]
+		events.sort(key=lambda event: (list(GESTURE_HINTS).index(event.split('_')[1]), event))
+		if events:
+			button, gesture	= events[0][1:].split('_')
+			hints.append(f"{GESTURE_HINTS[gesture].format(b=button)} {label}")
+	return(hints)
+
 I2C_BUS				= 1
 I2C_ADDRESS			= 0x57
 
@@ -83,7 +98,7 @@ class pisugar3_buttons(object):
 
 	POLL_SEC		= 0.05
 	LONG_SEC		= 0.8
-	DOUBLE_SEC		= 0.4
+	DOUBLE_SEC		= 0.3
 
 	TAP_EVENTS		= {1: 'single', 2: 'double', 3: 'long'}
 

@@ -27,6 +27,7 @@ import time
 import os
 import pathlib
 import subprocess
+import threading
 
 import lib_cron_ip
 import lib_display
@@ -44,6 +45,7 @@ import lib_system
 class MENU_CONTROLLER(object):
 	def __init__(self):
 		self.proceed	= True
+		self.wake		= threading.Event()	# set by the menu, wakes up the display loop
 
 	def terminate(self):
 		self.proceed	= False
@@ -53,6 +55,7 @@ class menu(object):
 	def __init__(self, DISPLAY_LINES, setup, menu_controller):
 
 		self.DISPLAY_LINES	= DISPLAY_LINES;
+		self.menu_controller	= menu_controller
 
 		self.__display			= lib_display.display()
 		self.__setup			= setup
@@ -84,6 +87,7 @@ class menu(object):
 		self.const_MENU_ACTIVE_MARKERFILE				= self.__setup.get_val('const_MENU_ACTIVE_MARKERFILE')
 
 		self.buttons	= {}
+		self.hints		= None	# callable: labels -> hint items for the status bar line
 
 		## menu-types:
 		#
@@ -306,6 +310,7 @@ class menu(object):
 	def GPIO_init(self):
 		if self.conf_MENU_BUTTON_COMBINATION == 'pisugar3':
 			# PiSugar 3 buttons via I2C, no GPIO buttons
+			self.hints	= lib_pisugar.menu_hints
 			try:
 				self.pisugar_buttons	= lib_pisugar.pisugar3_buttons({
 					'up':		self.move_up,
@@ -466,6 +471,7 @@ class menu(object):
 		FrameTime			= self.const_MENU_FRAME_TIME
 		LINES 				= []
 		n					= 0
+		confirm				= False
 
 		# define title
 		self.HEAD_LINES = 0
@@ -491,6 +497,7 @@ class menu(object):
 				# confirm item
 				if self.MENU[self.MENU_LEVEL][n]['type'] == 'confirmitem':
 					LINES	+= [f"s=b:{self.__lan.l('box_menu_confirm')}", f"s=b:{TITLE}", "s=h:{}".format(self.__lan.l('box_menu_yes'))]
+					confirm	= True
 					break
 
 				elif self.MENU[self.MENU_LEVEL][n]['type'] == 'shell':
@@ -536,7 +543,15 @@ class menu(object):
 			n += 1
 
 		if LINES:
-			self.__display.message([f'set:clear,time={FrameTime}'] + LINES)
+			settings	= f'set:clear,time={FrameTime}'
+
+			# button hints in the status bar line
+			if self.hints:
+				labels	= {'right': self.__lan.l('box_menu_yes'), 'left': 'No'} if confirm else {'down': 'next', 'up': 'prev', 'right': 'OK', 'left': 'back'}
+				settings	+= f",hint={'|'.join(self.hints(labels))}"
+
+			self.__display.message([settings] + LINES)
+			self.menu_controller.wake.set()
 
 	def move_down(self):
 		if len(self.MENU[self.MENU_LEVEL]) > (self.MENU_POS[self.MENU_LEVEL] + 1):

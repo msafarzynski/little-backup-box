@@ -85,8 +85,10 @@ class display(object):
 			# write DisplayFile in any case to prevent repeting IP message
 			for i in range (4):
 				try:
-					with open(DisplayFilePath,'w') as DisplayFile:
+					# write atomically, display.py ignores *.tmp
+					with open(f'{DisplayFilePath}.tmp','w') as DisplayFile:
 						DisplayFile.write('\n'.join(str(Line) for Line in Lines))
+					os.replace(f'{DisplayFilePath}.tmp', DisplayFilePath)
 					break
 				except:
 					if i == 3:
@@ -148,7 +150,7 @@ class display_content_files(object):
 			ContentFilesList	= []
 
 		# keep files only in ContentFilesList
-		ContentFilesList	= [f"{self.const_DISPLAY_CONTENT_PATH}/{filename}" for filename in ContentFilesList if os.path.isfile(f"{self.const_DISPLAY_CONTENT_PATH}/{filename}")]
+		ContentFilesList	= [f"{self.const_DISPLAY_CONTENT_PATH}/{filename}" for filename in ContentFilesList if not filename.endswith('.tmp') and os.path.isfile(f"{self.const_DISPLAY_CONTENT_PATH}/{filename}")]
 
 		ContentFilesList.sort()
 
