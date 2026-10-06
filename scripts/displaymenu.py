@@ -25,6 +25,7 @@ from gpiozero import Button
 import sys
 import time
 import os
+import pathlib
 import subprocess
 
 import lib_cron_ip
@@ -80,6 +81,7 @@ class menu(object):
 
 		self.RCLONE_CONFIG_FILE							= f"{self.const_MEDIA_DIR}/{self.__setup.get_val('const_RCLONE_CONFIG_FILE')}"
 		self.const_MENU_TIMEOUT_SEC						= self.__setup.get_val('const_MENU_TIMEOUT_SEC')
+		self.const_MENU_ACTIVE_MARKERFILE				= self.__setup.get_val('const_MENU_ACTIVE_MARKERFILE')
 
 		self.buttons	= {}
 
@@ -409,6 +411,12 @@ class menu(object):
 			self.reset()
 		else:
 			self.LAST_INPUT_TIME	= time.time()
+
+		# lib_cron_ip does not interrupt the menu while this file is younger than const_MENU_TIMEOUT_SEC
+		try:
+			pathlib.Path(self.const_MENU_ACTIVE_MARKERFILE).touch()
+		except OSError:
+			pass
 
 	def create_confirmed_shell_action(self, title, command):
 		return([

@@ -391,6 +391,7 @@ class setup(object):
 					'const_IP_SENT_MARKERFILE':						{'type': 'str'},
 					'const_MENU_FRAME_TIME':						{'type': 'float'},
 					'const_MENU_TIMEOUT_SEC':						{'type': 'float'},
+					'const_MENU_ACTIVE_MARKERFILE':					{'type': 'str'},
 					'const_RCLONE_CONFIG_FILE':						{'type': 'str'},
 					'const_BUTTONS_CONFIG_FILE':					{'type': 'str'},
 					'const_BUTTONS_PRIVATE_CONFIG_FILE':			{'type': 'str'},

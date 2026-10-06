@@ -20,6 +20,7 @@
 import argparse
 import base64
 import os
+import time
 
 import lib_comitup
 import lib_display
@@ -44,6 +45,8 @@ class ip_info(object):
 		self.__const_WIFI_QR_FILE_PATH			= self.__setup.get_val('const_WIFI_QR_FILE_PATH')
 
 		self.__const_DISPLAY_CONTENT_OLD_FILE	= self.__setup.get_val('const_DISPLAY_CONTENT_OLD_FILE')
+		self.__const_MENU_ACTIVE_MARKERFILE		= self.__setup.get_val('const_MENU_ACTIVE_MARKERFILE')
+		self.__const_MENU_TIMEOUT_SEC			= self.__setup.get_val('const_MENU_TIMEOUT_SEC')
 		self.__const_IP_QR_FILE_PATTERN			= self.__setup.get_val('const_IP_QR_FILE_PATTERN')
 
 		self.__conf_DISP_RESOLUTION_X			= self.__setup.get_val('conf_DISP_RESOLUTION_X')
@@ -59,9 +62,16 @@ class ip_info(object):
 		self.__IPs		= lib_network.get_IPs().split('\n')
 		self.__IPs[:]	= [element for element in self.__IPs if element]
 
+	def menu_active(self):
+		# the display menu was used within const_MENU_TIMEOUT_SEC
+		try:
+			return(time.time() - os.path.getmtime(self.__const_MENU_ACTIVE_MARKERFILE) < self.__const_MENU_TIMEOUT_SEC)
+		except OSError:
+			return(False)
+
 	def display_ip(self, FrameTime=None, force=False):
 
-		if not self.__conf_DISP_IP_REPEAT and not force:
+		if not force and (not self.__conf_DISP_IP_REPEAT or self.menu_active()):
 			return()
 
 		FrameTime	= self.__conf_DISP_FRAME_TIME_IP if FrameTime is None else FrameTime
@@ -98,7 +108,7 @@ class ip_info(object):
 
 	def display_wifi_qr(self, FrameTime=None, force=False):
 
-		if not self.__conf_DISP_IP_REPEAT and not force:
+		if not force and (not self.__conf_DISP_IP_REPEAT or self.menu_active()):
 			return()
 
 		FrameTime	= self.__conf_DISP_FRAME_TIME_IP * 2 if FrameTime is None else FrameTime
