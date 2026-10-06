@@ -75,6 +75,7 @@ from luma.lcd.device import st7735
 from PIL import Image, ImageDraw, ImageFont
 
 import displaymenu
+import lib_display
 from lib_display import display_content_files
 
 # import lib_debug
@@ -90,6 +91,7 @@ class DISPLAY(object):
 		signal.signal(signal.SIGINT, self.terminate)   # Interrupt signal
 
 		self.loop_continue	= True
+		lib_display.DISPLAY_DAEMON	= True
 		self.hint			= None	# status bar replacement of the current content (set:hint=a|b|c)
 
 		# cleanup pins

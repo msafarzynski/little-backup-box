@@ -179,7 +179,7 @@ def test_system_shutdown_hook(monkeypatch, action, output_on):
 
 
 def test_menu_hints_use_quickest_gesture():
-	assert lib_pisugar.menu_hints({'down': 'next', 'up': 'prev', 'right': 'OK', 'left': 'back'}) == ['1 next', '11 prev', '22 OK', '2 back']
+	assert lib_pisugar.menu_hints({'down': 'next', 'up': 'prev', 'right': 'OK', 'left': 'back'}) == ['2 next', '11 prev', '22 OK', '1 back']
 
 
 def test_menu_hints_skip_unmapped_actions(monkeypatch):

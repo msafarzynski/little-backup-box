@@ -32,6 +32,9 @@ import time
 # import lib_debug
 # xx	= lib_debug.debug()
 
+# set by display.py: messages from inside the display daemon do not need to check if it runs
+DISPLAY_DAEMON	= False
+
 class display(object):
 
 	def __init__(self):
@@ -55,6 +58,9 @@ class display(object):
 		self.__start_display()
 
 	def __start_display(self):
+		if DISPLAY_DAEMON:
+			return()
+
 		if self.conf_DISP == 'display' and subprocess.run(f'/usr/bin/pgrep -fa "{self.WORKING_DIR}/display.p[y]" | /usr/bin/grep -v "pgrep"', shell=True, stdout=subprocess.DEVNULL).returncode != 0:
 			# grep: returncode=1 if no matches found
 			try:

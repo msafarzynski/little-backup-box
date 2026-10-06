@@ -39,11 +39,13 @@ import time
 import smbus2
 
 # event -> menu action (down, up, right, left or none)
+# The frequent actions are on button 2: its gestures are detected here within 0.3 s,
+# while the firmware takes about 1.5 s to report a single tap of button 1.
 BUTTON_MAP	= {
-	'b1_single':	'down',
+	'b1_single':	'left',
 	'b1_double':	'up',
 	'b1_long':		'right',
-	'b2_single':	'left',
+	'b2_single':	'down',
 	'b2_double':	'right',
 	'b2_long':		'none',
 }
