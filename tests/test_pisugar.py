@@ -7,16 +7,27 @@ import lib_pisugar
 
 
 class FakeBus(object):
+	# like the PiSugar 3: writes are ignored unless register 0x0B is unlocked with 0x29
 	def __init__(self, *args):
 		self.regs = [0] * 0x40
 		self.regs[0x02] = 0xEC
+		self.regs[0x03] = 0x40
 		self.lock = threading.Lock()
 
 	def read_i2c_block_data(self, address, register, length):
 		with self.lock:
 			return self.regs[register:register + length]
 
+	def read_byte_data(self, address, register):
+		with self.lock:
+			return self.regs[register]
+
 	def write_byte_data(self, address, register, value):
+		with self.lock:
+			if register == 0x0B or self.regs[0x0B] == 0x29:
+				self.regs[register] = value & 0xFF
+
+	def firmware_sets(self, register, value):
 		with self.lock:
 			self.regs[register] = value
 
@@ -43,7 +54,7 @@ def press_sequence(device, steps):
 @pytest.mark.parametrize('tap, event', [(1, 'b1_single'), (2, 'b1_double'), (3, 'b1_long')])
 def test_button1_tap_is_reported_and_cleared(buttons, tap, event):
 	device, bus, events = buttons
-	bus.write_byte_data(0x57, 0x08, 0xF0 | tap)
+	bus.firmware_sets(0x08, 0xF0 | tap)
 	time.sleep(0.2)
 	assert events == [event]
 	assert bus.regs[0x08] == 0xF0	# only the tap bits are cleared
@@ -78,9 +89,9 @@ def test_button2_double_press_and_hold_is_ignored(buttons):
 
 def test_button2_live_polling(buttons):
 	device, bus, events = buttons
-	bus.regs[0x02] = 0xED
+	bus.firmware_sets(0x02, 0xED)
 	time.sleep(0.15)
-	bus.regs[0x02] = 0xEC
+	bus.firmware_sets(0x02, 0xEC)
 	time.sleep(0.6)
 	assert events == ['b2_single']
 
@@ -97,7 +108,7 @@ def test_i2c_errors_are_survived(buttons, monkeypatch):
 		return original(*args)
 
 	monkeypatch.setattr(bus, 'read_i2c_block_data', flaky)
-	bus.write_byte_data(0x57, 0x08, 1)
+	bus.firmware_sets(0x08, 1)
 	time.sleep(0.5)
 	assert events == ['b1_single']
 
@@ -107,7 +118,7 @@ def test_unmapped_action_is_ignored(monkeypatch):
 	monkeypatch.setattr(lib_pisugar.smbus2, 'SMBus', lambda *args: bus)
 	monkeypatch.setattr(lib_pisugar, 'BUTTON_MAP', {'b1_single': 'none'})
 	device = lib_pisugar.pisugar3_buttons({'down': lambda: pytest.fail('must not fire')})
-	bus.write_byte_data(0x57, 0x08, 1)
+	bus.firmware_sets(0x08, 1)
 	time.sleep(0.2)
 	device.stop()
 	assert bus.regs[0x08] == 0
@@ -116,3 +127,58 @@ def test_unmapped_action_is_ignored(monkeypatch):
 def test_power_button_long_press_is_not_used():
 	# long press is the PiSugar hardware power off
 	assert lib_pisugar.BUTTON_MAP['b2_long'] == 'none'
+
+
+def test_writes_are_locked_again(buttons):
+	device, bus, events = buttons
+	bus.firmware_sets(0x08, 1)
+	time.sleep(0.2)
+	assert bus.regs[0x08] == 0
+	assert bus.regs[0x0B] == 0x00
+
+
+@pytest.fixture
+def soft_buttons(monkeypatch):
+	bus = FakeBus()
+	monkeypatch.setattr(lib_pisugar.smbus2, 'SMBus', lambda *args: bus)
+	poweroffs = []
+	device = lib_pisugar.pisugar3_buttons({}, on_poweroff=lambda: poweroffs.append(time.time()))
+	yield device, bus, poweroffs
+	device.stop()
+
+
+def test_soft_poweroff_only_enabled_with_handler(buttons, soft_buttons):
+	device, bus, events = buttons
+	assert bus.regs[0x03] & 0x10 == 0
+	device, bus, poweroffs = soft_buttons
+	assert bus.regs[0x03] == 0x50
+
+
+def test_power_button_long_press_powers_off_once(soft_buttons):
+	device, bus, poweroffs = soft_buttons
+	bus.firmware_sets(0x03, 0x58)	# firmware: soft power off requested
+	time.sleep(0.2)
+	assert len(poweroffs) == 1
+	assert bus.regs[0x03] == 0x50	# request cleared, soft power off still enabled
+
+	bus.firmware_sets(0x03, 0x58)
+	time.sleep(0.2)
+	assert len(poweroffs) == 1
+
+
+def test_stop_restores_hard_power_off(soft_buttons):
+	device, bus, poweroffs = soft_buttons
+	device.stop()
+	assert bus.regs[0x03] & 0x10 == 0
+
+
+@pytest.mark.parametrize('action, output_on', [('poweroff', False), ('halt', False), ('reboot', True)])
+def test_system_shutdown_hook(monkeypatch, action, output_on):
+	bus = FakeBus()
+	bus.firmware_sets(0x03, 0x58)
+	monkeypatch.setattr(lib_pisugar.smbus2, 'SMBus', lambda *args: bus)
+	lib_pisugar.system_shutdown(action)
+	assert bus.regs[0x03] == 0x40
+	assert bool(bus.regs[0x02] & 0x20) == output_on
+	assert bus.regs[0x02] & ~0x20 == 0xEC & ~0x20
+	assert bus.regs[0x0B] == 0x00

@@ -20,11 +20,20 @@
 # button 1: the firmware detects single/double/long taps and reports them in register 0x08 (bits 0-1).
 #           The event is cleared after reading (as pisugar-server does).
 # button 2: the PiSugar power button. Register 0x02 bit 0 only reflects the pressed state,
-#           gestures are detected here. Long press (power off) and double press and hold (power on)
-#           belong to the PiSugar and are not mapped.
+#           gestures are detected here. Double press and hold (power on) belongs to the PiSugar.
+#           Long press: soft power off is enabled while the menu runs (register 0x03 bit 4), the PiSugar
+#           then only sets a flag (bit 3) instead of cutting the power and the box is shut down cleanly.
+#           Soft power off is disabled again when the menu stops and by the system shutdown hook,
+#           so the hard power off works whenever LBB is not running.
 #
+# System shutdown hook (/usr/lib/systemd/system-shutdown/): lib_pisugar.py --system-shutdown poweroff|halt|reboot
+# disables soft power off and, on poweroff/halt, switches the PiSugar output off after the filesystems are read only.
+#
+# Register layout and write protection as in pisugar-server (pisugar-core/src/pisugar3.rs).
 # Do not run pisugar-server in parallel, it would consume the tap events of button 1.
 
+import argparse
+import signal
 import sys
 import threading
 import time
@@ -41,12 +50,36 @@ BUTTON_MAP	= {
 	'b2_long':		'none',
 }
 
-class pisugar3_buttons(object):
+I2C_BUS				= 1
+I2C_ADDRESS			= 0x57
 
-	I2C_BUS			= 1
-	I2C_ADDRESS		= 0x57
-	REG_CTRL1		= 0x02
-	REG_TAP			= 0x08
+REG_CTRL1			= 0x02	# bit 5: power output enabled, bit 0: power button pressed
+REG_CTRL2			= 0x03	# bit 4: soft power off enabled, bit 3: soft power off requested
+REG_TAP				= 0x08	# bits 0-1: button 1 tap event
+REG_WRITE_ENABLE	= 0x0B
+
+WRITE_ENABLE_KEY	= 0x29
+
+def write_register(bus, register, value):
+	# the PiSugar 3 ignores writes unless they are unlocked
+	bus.write_byte_data(I2C_ADDRESS, REG_WRITE_ENABLE, WRITE_ENABLE_KEY)
+	try:
+		bus.write_byte_data(I2C_ADDRESS, register, value)
+	finally:
+		bus.write_byte_data(I2C_ADDRESS, REG_WRITE_ENABLE, 0x00)
+
+def set_soft_poweroff(bus, enable):
+	ctrl2	= bus.read_byte_data(I2C_ADDRESS, REG_CTRL2) & 0b1110_0000
+	write_register(bus, REG_CTRL2, ctrl2 | (0b0001_0000 if enable else 0))
+
+def system_shutdown(action):
+	bus	= smbus2.SMBus(I2C_BUS)
+	set_soft_poweroff(bus, False)
+	if action in ('poweroff', 'halt'):
+		ctrl1	= bus.read_byte_data(I2C_ADDRESS, REG_CTRL1)
+		write_register(bus, REG_CTRL1, ctrl1 & ~0b0010_0000)
+
+class pisugar3_buttons(object):
 
 	POLL_SEC		= 0.05
 	LONG_SEC		= 0.8
@@ -54,12 +87,15 @@ class pisugar3_buttons(object):
 
 	TAP_EVENTS		= {1: 'single', 2: 'double', 3: 'long'}
 
-	def __init__(self, actions):
+	def __init__(self, actions, on_poweroff=None):
 		# actions: dict menu action -> callable
-		self.__actions	= actions
-		self.__running	= True
+		# on_poweroff: callable for a long press of the power button, None keeps the PiSugar hard power off
+		self.__actions		= actions
+		self.__on_poweroff	= on_poweroff
+		self.__running		= True
 
-		self.__bus		= smbus2.SMBus(self.I2C_BUS)
+		self.__bus		= smbus2.SMBus(I2C_BUS)
+		self.__set_soft_poweroff(on_poweroff is not None)
 
 		# button 2 gesture state
 		self.__b2_pressed		= False
@@ -73,6 +109,17 @@ class pisugar3_buttons(object):
 
 	def stop(self):
 		self.__running	= False
+		self.__thread.join(timeout=1)
+		self.__set_soft_poweroff(False)
+
+	def __set_soft_poweroff(self, enable):
+		for attempt in range(5):
+			try:
+				set_soft_poweroff(self.__bus, enable)
+				return()
+			except OSError:
+				time.sleep(0.05)
+		print(f'PiSugar 3 soft power off could not be {"enabled" if enable else "disabled"}', file=sys.stderr)
 
 	def __fire(self, event):
 		action	= BUTTON_MAP.get(event, 'none')
@@ -88,7 +135,7 @@ class pisugar3_buttons(object):
 		while self.__running:
 			try:
 				# registers 0x02..0x08 in one transfer
-				regs	= self.__bus.read_i2c_block_data(self.I2C_ADDRESS, self.REG_CTRL1, self.REG_TAP - self.REG_CTRL1 + 1)
+				regs	= self.__bus.read_i2c_block_data(I2C_ADDRESS, REG_CTRL1, REG_TAP - REG_CTRL1 + 1)
 				errors	= 0
 			except OSError:
 				# the bcm2835 i2c controller occasionally times out with the PiSugar
@@ -101,13 +148,23 @@ class pisugar3_buttons(object):
 			now	= time.time()
 
 			# button 1
-			tap	= regs[self.REG_TAP - self.REG_CTRL1]
+			tap	= regs[REG_TAP - REG_CTRL1]
 			if tap & 0x03:
 				try:
-					self.__bus.write_byte_data(self.I2C_ADDRESS, self.REG_TAP, tap & ~0x03)
+					write_register(self.__bus, REG_TAP, tap & ~0x03)
 				except OSError:
 					pass
 				self.__fire(f'b1_{self.TAP_EVENTS[tap & 0x03]}')
+
+			# power button long press
+			ctrl2	= regs[REG_CTRL2 - REG_CTRL1]
+			if self.__on_poweroff and (ctrl2 & 0b0001_1000) == 0b0001_1000:
+				try:
+					write_register(self.__bus, REG_CTRL2, ctrl2 & ~0b0000_1000)
+				except OSError:
+					continue
+				on_poweroff, self.__on_poweroff	= self.__on_poweroff, None	# only once
+				on_poweroff()
 
 			# button 2
 			self.__b2_step(bool(regs[0] & 0x01), now)
@@ -141,12 +198,27 @@ class pisugar3_buttons(object):
 		self.__b2_pressed	= pressed
 
 if __name__ == "__main__":
+	parser	= argparse.ArgumentParser(description='PiSugar 3 buttons')
+	parser.add_argument('--system-shutdown', choices=['poweroff', 'halt', 'reboot', 'kexec'], help='called by the systemd shutdown hook')
+	parser.add_argument('--soft-poweroff', action='store_true', help='test mode: enable soft power off')
+	args	= parser.parse_args()
+
+	if args.system_shutdown:
+		system_shutdown(args.system_shutdown)
+		sys.exit()
+
 	# test: print button events and their menu actions
+	signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit())
 	menu_actions	= dict(BUTTON_MAP)
 	BUTTON_MAP.update({event: event for event in menu_actions})
-	buttons	= pisugar3_buttons({event: (lambda e=event: print(f'{e} -> {menu_actions[e]}', flush=True)) for event in menu_actions})
+	buttons	= pisugar3_buttons(
+		{event: (lambda e=event: print(f'{e} -> {menu_actions[e]}', flush=True)) for event in menu_actions},
+		on_poweroff=(lambda: print('power button long press -> poweroff', flush=True)) if args.soft_poweroff else None
+	)
 	try:
 		while True:
 			time.sleep(1)
 	except KeyboardInterrupt:
+		pass
+	finally:
 		buttons.stop()

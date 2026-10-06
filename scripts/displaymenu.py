@@ -310,7 +310,7 @@ class menu(object):
 					'down':		self.move_down,
 					'left':		self.move_left,
 					'right':	self.move_right,
-				})
+				}, on_poweroff=self.power_button_poweroff)
 			except Exception as e:
 				print(f'PiSugar 3 buttons could not be enabled: {e}', file=sys.stderr)
 			return()
@@ -343,6 +343,13 @@ class menu(object):
 
 									self.GPIO_config_button(GPIO_PIN,ButtonFunction)
 
+
+	def power_button_poweroff(self):
+		# PiSugar power button long press: stop a running backup and shut down cleanly
+		subprocess.Popen(
+			['/bin/bash', '-c', f'{self.WORKING_DIR}/stop_backup.sh; /usr/bin/python3 {self.WORKING_DIR}/lib_poweroff.py poweroff'],
+			start_new_session=True
+		)
 
 	def GPIO_config_button(self,GPIO_PIN,ButtonFunction):
 		# rotate buttons
