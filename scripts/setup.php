@@ -1072,7 +1072,8 @@ CONFIGDATA;
 										'SSD1331',
 										'SH1106',
 										'ST7735',
-										'ST7735 WAVESHARE LCD display HAT'
+										'ST7735 WAVESHARE LCD display HAT',
+										'WAVESHARE 2.13 E-PAPER HAT V4'
 									);
 									foreach($display_drivers_array as $display_driver) {
 										echo "<option value='" . $display_driver . "' " . ($config["conf_DISP_DRIVER"] == $display_driver?" selected":"") . ">" . $display_driver . "</option>";
@@ -1317,6 +1318,7 @@ CONFIGDATA;
 										}
 										echo ("<option value='" . $VariantOption . "' " . ($config["conf_MENU_BUTTON_COMBINATION"] == $VariantOption?" selected":"") . ">" . $VariantOption . "</option>");
 									}
+									echo ("<option value='pisugar3' " . ($config["conf_MENU_BUTTON_COMBINATION"] == 'pisugar3'?" selected":"") . ">PiSugar 3</option>");
 								?>
 							</select>
 
@@ -1366,6 +1368,11 @@ CONFIGDATA;
 										echo("</tr>");
 
 									}
+									echo("<tr style=\"border: thin solid; vertical-align: top;\"><td><b>pisugar3</b></td>");
+									foreach(array('button 1 double, button 2 double', 'button 1 single', 'button 2 single', 'button 1 long', 'PiSugar 3 buttons (I2C), button 2 long: main menu') as $FIELD) {
+										echo("<td style=\"border: thin solid; vertical-align: top;\">" . $FIELD . "</td>");
+									}
+									echo("</tr>");
 								?>
 							</table>
 							<a href="/files/index.php?p=&edit=buttons.private.cfg"><?php echo L::config_menu_button_edit_custom_configfile; ?></a>

@@ -31,6 +31,7 @@ import lib_cron_ip
 import lib_display
 import lib_language
 import lib_network
+import lib_pisugar
 import lib_setup
 import lib_socialmedia
 import lib_storage
@@ -297,7 +298,24 @@ class menu(object):
 		while menu_controller.proceed:
 			time.sleep(1)
 
+		if hasattr(self, 'pisugar_buttons'):
+			self.pisugar_buttons.stop()
+
 	def GPIO_init(self):
+		if self.conf_MENU_BUTTON_COMBINATION == 'pisugar3':
+			# PiSugar 3 buttons via I2C, no GPIO buttons
+			try:
+				self.pisugar_buttons	= lib_pisugar.pisugar3_buttons({
+					'up':		self.move_up,
+					'down':		self.move_down,
+					'left':		self.move_left,
+					'right':	self.move_right,
+					'home':		lambda: self.reset(ShowMenu=True),
+				})
+			except Exception as e:
+				print(f'PiSugar 3 buttons could not be enabled: {e}', file=sys.stderr)
+			return()
+
 		if self.conf_MENU_BUTTON_COMBINATION:
 			if self.conf_MENU_BUTTON_COMBINATION.isnumeric():
 				ButtonsConfigFile		= f"{self.WORKING_DIR}/{self.const_BUTTONS_CONFIG_FILE}"

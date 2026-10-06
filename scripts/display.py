@@ -61,6 +61,7 @@ import threading
 import time
 
 import lib_comitup
+import lib_epaper
 import lib_network
 import lib_setup
 import lib_system
@@ -166,7 +167,9 @@ class DISPLAY(object):
 
 		serial	= None
 		try:
-			if self.__conf_DISP_CONNECTION == 'I2C':
+			if self.__conf_DISP_DRIVER == 'WAVESHARE 2.13 E-PAPER HAT V4':
+				pass # SPI and GPIO are handled by lib_epaper
+			elif self.__conf_DISP_CONNECTION == 'I2C':
 				serial = i2c(port=1, address=self.__conf_DISP_I2C_ADDRESS)
 			elif self.__conf_DISP_CONNECTION == 'SPI':
 				if self.__conf_DISP_DRIVER == 'ST7735':
@@ -184,7 +187,9 @@ class DISPLAY(object):
 			print(f'Display connection to {self.__conf_DISP_CONNECTION} could not be enabled.', file=sys.stderr)
 
 		try:
-			if self.__conf_DISP_DRIVER == 'none' or serial is None:
+			if self.__conf_DISP_DRIVER == 'WAVESHARE 2.13 E-PAPER HAT V4':
+				self.device	= lib_epaper.epd2in13_v4(spi_port=self.__conf_DISP_SPI_PORT, inverse=self.__conf_DISP_COLOR_INVERSE)
+			elif self.__conf_DISP_DRIVER == 'none' or serial is None:
 				self.device	= self.__display_dummy()
 				self.hardware_ready	= False
 			elif self.__conf_DISP_DRIVER == 'SSD1306':
@@ -710,7 +715,7 @@ class DISPLAY(object):
 				# statusbar
 				if (
 					self.__conf_DISP_SHOW_STATUSBAR and
-					time.time() - display_time >= self.__const_DISPLAY_STATUSBAR_TOGGLE_SEC
+					time.time() - display_time >= getattr(self.device, 'statusbar_refresh_sec', self.__const_DISPLAY_STATUSBAR_TOGGLE_SEC)
 					):
 					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=False)
 					display_time	= time.time()
