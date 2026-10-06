@@ -137,48 +137,42 @@ def test_writes_are_locked_again(buttons):
 	assert bus.regs[0x0B] == 0x00
 
 
-@pytest.fixture
-def soft_buttons(monkeypatch):
-	bus = FakeBus()
-	monkeypatch.setattr(lib_pisugar.smbus2, 'SMBus', lambda *args: bus)
-	poweroffs = []
-	device = lib_pisugar.pisugar3_buttons({}, on_poweroff=lambda: poweroffs.append(time.time()))
-	yield device, bus, poweroffs
-	device.stop()
-
-
-def test_soft_poweroff_only_enabled_with_handler(buttons, soft_buttons):
+def test_garbage_while_pisugar_restarts_is_ignored(buttons):
+	# the controller returned all zeros and a stuck long tap while restarting
 	device, bus, events = buttons
-	assert bus.regs[0x03] & 0x10 == 0
-	device, bus, poweroffs = soft_buttons
-	assert bus.regs[0x03] == 0x50
-
-
-def test_power_button_long_press_powers_off_once(soft_buttons):
-	device, bus, poweroffs = soft_buttons
-	bus.firmware_sets(0x03, 0x58)	# firmware: soft power off requested
+	bus.firmware_sets(0x02, 0x00)
+	bus.firmware_sets(0x08, 0x03)
 	time.sleep(0.2)
-	assert len(poweroffs) == 1
-	assert bus.regs[0x03] == 0x50	# request cleared, soft power off still enabled
-
-	bus.firmware_sets(0x03, 0x58)
+	assert events == []
+	bus.firmware_sets(0x02, 0xEC)
 	time.sleep(0.2)
-	assert len(poweroffs) == 1
+	assert events == ['b1_long']
 
 
-def test_stop_restores_hard_power_off(soft_buttons):
-	device, bus, poweroffs = soft_buttons
-	device.stop()
-	assert bus.regs[0x03] & 0x10 == 0
+def test_tap_is_not_repeated_when_clearing_fails(buttons, monkeypatch):
+	device, bus, events = buttons
+	original = bus.write_byte_data
+	failing = {'on': True}
+
+	def write(address, register, value):
+		if failing['on'] and register == 0x08:
+			raise OSError(121, 'Remote I/O error')
+		original(address, register, value)
+
+	monkeypatch.setattr(bus, 'write_byte_data', write)
+	bus.firmware_sets(0x08, 0x03)
+	time.sleep(0.3)
+	assert events == []
+	failing['on'] = False
+	time.sleep(0.3)
+	assert events == ['b1_long']
 
 
-@pytest.mark.parametrize('action, output_on', [('poweroff', False), ('halt', False), ('reboot', True)])
+@pytest.mark.parametrize('action, output_on', [('poweroff', False), ('halt', False), ('reboot', True), ('kexec', True)])
 def test_system_shutdown_hook(monkeypatch, action, output_on):
 	bus = FakeBus()
-	bus.firmware_sets(0x03, 0x58)
 	monkeypatch.setattr(lib_pisugar.smbus2, 'SMBus', lambda *args: bus)
 	lib_pisugar.system_shutdown(action)
-	assert bus.regs[0x03] == 0x40
 	assert bool(bus.regs[0x02] & 0x20) == output_on
-	assert bus.regs[0x02] & ~0x20 == 0xEC & ~0x20
+	assert bus.regs[0x02] | 0x20 == 0xEC	# other bits untouched
 	assert bus.regs[0x0B] == 0x00

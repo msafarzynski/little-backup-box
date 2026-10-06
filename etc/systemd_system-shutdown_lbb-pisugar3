@@ -2,7 +2,7 @@
 
 # Little Backup Box: systemd system-shutdown hook for the PiSugar 3, called with poweroff|halt|reboot|kexec
 # after all filesystems are read only.
-# Disables the PiSugar soft power off and, on poweroff/halt, switches the PiSugar power output off.
+# On poweroff/halt it switches the PiSugar power output off, so a halted Pi does not drain the battery.
 
 LBB_DIR=/var/www/little-backup-box
 
