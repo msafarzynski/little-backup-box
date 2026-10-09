@@ -341,6 +341,9 @@ sudo usermod -aG sudo ${USER_WWW_DATA}
 yes | sudo cp -f "${INSTALLER_DIR}/etc/sudoers_d_www-data" "/etc/sudoers.d/www-data"
 sudo chmod 0440 "/etc/sudoers.d/www-data"
 
+# mDNS on ethernet only while connected (prevents the lbb-2.local host name conflict with WiFi)
+sudo install -D -m 0755 "${INSTALLER_DIR}/etc/networkmanager_dispatcher_lbb-avahi" "/etc/NetworkManager/dispatcher.d/90-lbb-avahi"
+
 # PiSugar 3 shutdown hook (power output off after poweroff)
 sudo install -D -m 0755 "${INSTALLER_DIR}/etc/systemd_system-shutdown_lbb-pisugar3" "/usr/lib/systemd/system-shutdown/lbb-pisugar3"
 

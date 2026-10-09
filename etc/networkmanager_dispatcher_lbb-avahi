@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# Little Backup Box: NetworkManager dispatcher script (/etc/NetworkManager/dispatcher.d/90-lbb-avahi)
+#
+# With ethernet and WiFi in the same network, avahi sees its own host name on the second
+# interface, assumes a conflict and renames the box to lbb-2.local.
+# While eth0 is connected, mDNS is published on eth0 only, otherwise on all interfaces.
+
+ACTION="$2"
+
+case "${ACTION}" in
+	up|down|connectivity-change) ;;
+	*) exit 0 ;;
+esac
+
+CONF=/etc/avahi/avahi-daemon.conf
+
+if [ "$(cat /sys/class/net/eth0/operstate 2>/dev/null)" = "up" ] && ip -4 addr show dev eth0 | grep -q "inet "; then
+	WANTED="allow-interfaces=eth0"
+else
+	WANTED="#allow-interfaces=eth0"
+fi
+
+CURRENT="$(grep -E '^#?allow-interfaces=' "${CONF}")"
+
+if [ "${CURRENT}" != "${WANTED}" ]; then
+	sed -i -E "s/^#?allow-interfaces=.*/${WANTED}/" "${CONF}"
+	systemctl restart avahi-daemon
+fi
