@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Little Backup Box: systemd system-shutdown hook for the PiSugar 3, called with poweroff|halt|reboot|kexec
+# after all filesystems are read only.
+# On poweroff/halt it switches the PiSugar power output off, so a halted Pi does not drain the battery.
+
+LBB_DIR=/var/www/little-backup-box
+
+grep -q "^conf_MENU_BUTTON_COMBINATION='pisugar3'" "${LBB_DIR}/config.cfg" 2>/dev/null || exit 0
+
+PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 "${LBB_DIR}/lib_pisugar.py" --system-shutdown "$1"

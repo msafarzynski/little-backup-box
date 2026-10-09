@@ -32,6 +32,9 @@ import time
 # import lib_debug
 # xx	= lib_debug.debug()
 
+# set by display.py: messages from inside the display daemon do not need to check if it runs
+DISPLAY_DAEMON	= False
+
 class display(object):
 
 	def __init__(self):
@@ -55,6 +58,9 @@ class display(object):
 		self.__start_display()
 
 	def __start_display(self):
+		if DISPLAY_DAEMON:
+			return()
+
 		if self.conf_DISP == 'display' and subprocess.run(f'/usr/bin/pgrep -fa "{self.WORKING_DIR}/display.p[y]" | /usr/bin/grep -v "pgrep"', shell=True, stdout=subprocess.DEVNULL).returncode != 0:
 			# grep: returncode=1 if no matches found
 			try:
@@ -85,8 +91,10 @@ class display(object):
 			# write DisplayFile in any case to prevent repeting IP message
 			for i in range (4):
 				try:
-					with open(DisplayFilePath,'w') as DisplayFile:
+					# write atomically, display.py ignores *.tmp
+					with open(f'{DisplayFilePath}.tmp','w') as DisplayFile:
 						DisplayFile.write('\n'.join(str(Line) for Line in Lines))
+					os.replace(f'{DisplayFilePath}.tmp', DisplayFilePath)
 					break
 				except:
 					if i == 3:
@@ -148,7 +156,7 @@ class display_content_files(object):
 			ContentFilesList	= []
 
 		# keep files only in ContentFilesList
-		ContentFilesList	= [f"{self.const_DISPLAY_CONTENT_PATH}/{filename}" for filename in ContentFilesList if os.path.isfile(f"{self.const_DISPLAY_CONTENT_PATH}/{filename}")]
+		ContentFilesList	= [f"{self.const_DISPLAY_CONTENT_PATH}/{filename}" for filename in ContentFilesList if not filename.endswith('.tmp') and os.path.isfile(f"{self.const_DISPLAY_CONTENT_PATH}/{filename}")]
 
 		ContentFilesList.sort()
 

@@ -48,12 +48,12 @@
 # time=2:	Display time in seconds (empty for standard config)
 # temp:		show previous screen again after this
 # hidden:	markertext to write into const_DISPLAY_CONTENT_OLD_FILE
+# hint=a|b:	show these items instead of the status bar (button hints of the menu)
 # kill:		terminate display daemon
 
 import os
 import RPi.GPIO as GPIO
 import pathlib
-import shutil
 import signal
 import subprocess
 import sys
@@ -61,6 +61,7 @@ import threading
 import time
 
 import lib_comitup
+import lib_epaper
 import lib_network
 import lib_setup
 import lib_system
@@ -74,6 +75,7 @@ from luma.lcd.device import st7735
 from PIL import Image, ImageDraw, ImageFont
 
 import displaymenu
+import lib_display
 from lib_display import display_content_files
 
 # import lib_debug
@@ -89,6 +91,8 @@ class DISPLAY(object):
 		signal.signal(signal.SIGINT, self.terminate)   # Interrupt signal
 
 		self.loop_continue	= True
+		lib_display.DISPLAY_DAEMON	= True
+		self.hint			= None	# status bar replacement of the current content (set:hint=a|b|c)
 
 		# cleanup pins
 		GPIO.cleanup()
@@ -166,7 +170,9 @@ class DISPLAY(object):
 
 		serial	= None
 		try:
-			if self.__conf_DISP_CONNECTION == 'I2C':
+			if self.__conf_DISP_DRIVER == 'WAVESHARE 2.13 E-PAPER HAT V4':
+				pass # SPI and GPIO are handled by lib_epaper
+			elif self.__conf_DISP_CONNECTION == 'I2C':
 				serial = i2c(port=1, address=self.__conf_DISP_I2C_ADDRESS)
 			elif self.__conf_DISP_CONNECTION == 'SPI':
 				if self.__conf_DISP_DRIVER == 'ST7735':
@@ -184,7 +190,9 @@ class DISPLAY(object):
 			print(f'Display connection to {self.__conf_DISP_CONNECTION} could not be enabled.', file=sys.stderr)
 
 		try:
-			if self.__conf_DISP_DRIVER == 'none' or serial is None:
+			if self.__conf_DISP_DRIVER == 'WAVESHARE 2.13 E-PAPER HAT V4':
+				self.device	= lib_epaper.epd2in13_v4(spi_port=self.__conf_DISP_SPI_PORT)
+			elif self.__conf_DISP_DRIVER == 'none' or serial is None:
 				self.device	= self.__display_dummy()
 				self.hardware_ready	= False
 			elif self.__conf_DISP_DRIVER == 'SSD1306':
@@ -215,6 +223,13 @@ class DISPLAY(object):
 			self.device.contrast(self.__conf_DISP_CONTRAST)
 
 			self.device.persist	= False
+
+			# e-paper: black text on white, unless inverted
+			if self.__conf_DISP_COLOR_MODEL == '1' and getattr(self.device, 'background_white', False) != self.__conf_DISP_COLOR_INVERSE:
+				self.color_text		= 0
+				self.color_high		= 0
+				self.color_alert	= 0
+				self.color_bg		= 255
 
 		# define font
 		self.FONT = ImageFont.truetype(self.__const_FONT_PATH, self.__conf_DISP_FONT_SIZE)
@@ -281,6 +296,10 @@ class DISPLAY(object):
 	def get_statusbar(self):
 		if not self.__conf_DISP_SHOW_STATUSBAR:
 			return(None)
+
+		# button hints of the display menu replace the status
+		if self.hint:
+			return(self.hint)
 
 		statusbar	= []
 
@@ -571,6 +590,7 @@ class DISPLAY(object):
 			import_old_file 		= True
 			temp_screen				= False
 			hidden_info				= ''
+			hint					= None
 
 			# re-check for new files earlier than conf_DISP_FRAME_TIME, if no message was found
 			FrameTime = self.__conf_DISP_FRAME_TIME / 4
@@ -581,10 +601,6 @@ class DISPLAY(object):
 
 				if not os.path.isfile(ContentFile):
 					continue
-
-				# file could be in writing process, wait for minimal file age
-				if time.time() - os.stat(ContentFile).st_mtime < 0.2:
-					time.sleep(0.2)
 
 				Lines = []
 				FrameTime = self.__conf_DISP_FRAME_TIME
@@ -632,6 +648,9 @@ class DISPLAY(object):
 
 							if SettingType == 'hidden':
 								hidden_info		= SettingValue
+
+							if SettingType == 'hint':
+								hint			= SettingValue.split('|')
 
 							if SettingType == 'time' and float(SettingValue) >= 0:
 								FrameTime		= float(SettingValue)
@@ -690,7 +709,9 @@ class DISPLAY(object):
 
 				# display temp only:
 				if temp_screen and os.path.isfile(self.__const_DISPLAY_CONTENT_OLD_FILE):
-					shutil.copyfile(self.__const_DISPLAY_CONTENT_OLD_FILE, f'{ContentFile}')
+					# restore the previous screen as it was: 'set:clear' prevents appending the old lines to themselves
+					with open(self.__const_DISPLAY_CONTENT_OLD_FILE, 'r') as oCF, open(ContentFile, 'w') as newCF:
+						newCF.write('set:clear\n' + oCF.read())
 
 					if hidden_info:
 						with open(ContentFile, 'a') as newCF:
@@ -704,18 +725,21 @@ class DISPLAY(object):
 						if hidden_info:
 							oCF.write(f"\nset:hidden={hidden_info}")
 
+				self.hint	= hint
 				self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=True)
 				display_time	= time.time()
 			else:
 				# statusbar
 				if (
 					self.__conf_DISP_SHOW_STATUSBAR and
-					time.time() - display_time >= self.__const_DISPLAY_STATUSBAR_TOGGLE_SEC
+					time.time() - display_time >= getattr(self.device, 'statusbar_refresh_sec', self.__const_DISPLAY_STATUSBAR_TOGGLE_SEC)
 					):
 					self.show(Lines=Lines, statusbar=self.get_statusbar(), new_content=False)
 					display_time	= time.time()
 
-			time.sleep(FrameTime)
+			# menu input ends the frame time early
+			if self.menu_controller.wake.wait(FrameTime):
+				self.menu_controller.wake.clear()
 
 	class __display_dummy(object):
 

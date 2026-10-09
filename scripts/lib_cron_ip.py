@@ -20,6 +20,7 @@
 import argparse
 import base64
 import os
+import time
 
 import lib_comitup
 import lib_display
@@ -44,6 +45,9 @@ class ip_info(object):
 		self.__const_WIFI_QR_FILE_PATH			= self.__setup.get_val('const_WIFI_QR_FILE_PATH')
 
 		self.__const_DISPLAY_CONTENT_OLD_FILE	= self.__setup.get_val('const_DISPLAY_CONTENT_OLD_FILE')
+		self.__const_MENU_ACTIVE_MARKERFILE		= self.__setup.get_val('const_MENU_ACTIVE_MARKERFILE')
+		self.__const_MENU_TIMEOUT_SEC			= self.__setup.get_val('const_MENU_TIMEOUT_SEC')
+		self.__const_DISPLAY_IP_SCREENSAVER_SEC	= self.__setup.get_val('const_DISPLAY_IP_SCREENSAVER_SEC')
 		self.__const_IP_QR_FILE_PATTERN			= self.__setup.get_val('const_IP_QR_FILE_PATTERN')
 
 		self.__conf_DISP_RESOLUTION_X			= self.__setup.get_val('conf_DISP_RESOLUTION_X')
@@ -59,10 +63,37 @@ class ip_info(object):
 		self.__IPs		= lib_network.get_IPs().split('\n')
 		self.__IPs[:]	= [element for element in self.__IPs if element]
 
-	def display_ip(self, FrameTime=None, force=False):
+	def __seconds_since(self, path):
+		try:
+			return(time.time() - os.path.getmtime(path))
+		except OSError:
+			return(float('inf'))
 
-		if not self.__conf_DISP_IP_REPEAT and not force:
-			return()
+	def menu_active(self):
+		# the display menu was used within const_MENU_TIMEOUT_SEC
+		return(self.__seconds_since(self.__const_MENU_ACTIVE_MARKERFILE) < self.__const_MENU_TIMEOUT_SEC)
+
+	def screensaver_enabled(self):
+		return(self.__const_DISPLAY_IP_SCREENSAVER_SEC > 0)
+
+	def display_idle(self):
+		# neither menu input nor new display content within const_DISPLAY_IP_SCREENSAVER_SEC
+		return(min(
+			self.__seconds_since(self.__const_MENU_ACTIVE_MARKERFILE),
+			self.__seconds_since(self.__const_DISPLAY_CONTENT_OLD_FILE)
+		) >= self.__const_DISPLAY_IP_SCREENSAVER_SEC)
+
+	def display_ip(self, FrameTime=None, force=False):
+		# screensaver: if the display is idle, show the IP QR code until the next display content
+		screensaver	= self.screensaver_enabled() and not force
+
+		if not force:
+			if not self.__conf_DISP_IP_REPEAT:
+				return()
+			if screensaver and not self.display_idle():
+				return()
+			if not screensaver and self.menu_active():
+				return()
 
 		FrameTime	= self.__conf_DISP_FRAME_TIME_IP if FrameTime is None else FrameTime
 
@@ -85,10 +116,12 @@ class ip_info(object):
 				if IP and ((IP not in DisplayContentOld) or (OnlineMessage not in DisplayContentOld) or force):
 					IP_QR_FILE	= lib_network.create_ip_link_qr_image(IP=IP, OnlineStatus=OnlineStatus, IP_QR_FILE=self.__const_IP_QR_FILE_PATTERN, width=self.__conf_DISP_RESOLUTION_X, height=self.__conf_DISP_RESOLUTION_Y,font=self.__const_FONT_PATH, fontsize=self.__conf_DISP_FONT_SIZE)
 
-					if not IP_QR_FILE is None:
-						self.__display.message([f'set:time={FrameTime},temp', f":IMAGE={IP_QR_FILE}"], logging=False)
-					else:
+					if IP_QR_FILE is None:
 						self.__IPsFormatted.append(f":{IP}")
+					elif screensaver:
+						self.__display.message(['set:clear', f":IMAGE={IP_QR_FILE}"], logging=False)
+					else:
+						self.__display.message([f'set:time={FrameTime},temp', f":IMAGE={IP_QR_FILE}"], logging=False)
 
 			if self.__IPsFormatted:
 				self.__display.message([f'set:time={FrameTime}', f":{OnlineMessage}, IP:"] + self.__IPsFormatted, logging=False)
@@ -98,7 +131,7 @@ class ip_info(object):
 
 	def display_wifi_qr(self, FrameTime=None, force=False):
 
-		if not self.__conf_DISP_IP_REPEAT and not force:
+		if not force and (not self.__conf_DISP_IP_REPEAT or self.menu_active()):
 			return()
 
 		FrameTime	= self.__conf_DISP_FRAME_TIME_IP * 2 if FrameTime is None else FrameTime
@@ -254,6 +287,12 @@ if __name__ == "__main__":
 	)
 
 	parser.add_argument(
+		'--screensaver',
+		action	= argparse.BooleanOptionalAction,
+		help	= 'Show the IP QR code as screensaver if the display is idle (const_DISPLAY_IP_SCREENSAVER_SEC).'
+	)
+
+	parser.add_argument(
 		'--mail',
 		action	= argparse.BooleanOptionalAction,
 		help	= 'If an Internet connection exists, changes to the IP addresses will be sent by email if configured.'
@@ -261,11 +300,13 @@ if __name__ == "__main__":
 
 	args	= vars(parser.parse_args())
 
-	if args['display'] or args['mail']:
+	if args['display'] or args['screensaver'] or args['mail']:
 		ip	= ip_info()
 
 		if args['display']:
 			ip.display_wifi_qr()
+			ip.display_ip()
+		elif args['screensaver'] and ip.screensaver_enabled():
 			ip.display_ip()
 		if args['mail']:
 			thread	= ip.mail_ip()
